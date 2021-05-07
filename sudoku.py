@@ -71,8 +71,6 @@ class Sudoku:
                 axis = 0  # Ox
             elif rotation > 45 or rotation < -45:  # Vertical, pick uppermost and lowermost
                 axis = 1  # Oy
-                
-                rotation > 45 or rotation < -45
 
             # Find leftmost and rightmost points (or uppermost and lowermost)
             first_end_idx = points.argmin(axis=0)[axis]
