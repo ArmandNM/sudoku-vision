@@ -68,13 +68,13 @@ class Sudoku:
                 rotation += 180
             
             if rotation <= 45 and rotation >= -45:  # Horizontal, pick leftmost and rightmost ends
-                axis = 0  # Ox
+                closest_axis = 0  # Ox
             elif rotation > 45 or rotation < -45:  # Vertical, pick uppermost and lowermost
-                axis = 1  # Oy
+                closest_axis = 1  # Oy
 
             # Find leftmost and rightmost points (or uppermost and lowermost)
-            first_end_idx = points.argmin(axis=0)[axis]
-            second_end_idx = points.argmax(axis=0)[axis]
+            first_end_idx = points.argmin(axis=0)[closest_axis]
+            second_end_idx = points.argmax(axis=0)[closest_axis]
             
             x1, y1 = points[first_end_idx]
             x2, y2 = points[second_end_idx]
@@ -82,7 +82,7 @@ class Sudoku:
             theta = np.arctan2(y2 - y1, x1 - x2)
             theta_deg = np.rad2deg(theta)
             rho = x1 * np.sin(theta) + y1 * np.cos(theta)
-            merged_lines.append([x1, y1, x2, y2, theta, theta_deg, rho])
+            merged_lines.append([x1, y1, x2, y2, theta, theta_deg, rho, closest_axis])
 
         return merged_lines
 
@@ -144,23 +144,15 @@ def main():
     print('\n\n\nconverted\n\n')
     for line in merged_lines:
         print(line)
-        x1, y1, x2, y2, _, theta_deg, _ = line
+        x1, y1, x2, y2, _, theta_deg, _, axis = line
         
-        # Apply Q1-Q3 and Q2-Q4 equivallence
-        if theta_deg > 90:
-            theta_deg -= 180
-        elif theta_deg < -90:
-            theta_deg += 180
-        
-        print(line, theta_deg)
-        
-        if np.abs(np.abs(theta_deg) - 45) < 5:
+        if np.abs(np.abs(theta_deg) % 90 - 45) < 5:
             print('oblic') 
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 0), 3)
-        elif theta_deg > 45 or theta_deg < -45:
+        elif axis == 1:
             print('vertical')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 3)
-        elif theta_deg <= 45 and theta_deg  >= -45:
+        elif axis == 0:
             print('orizontal')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
 
