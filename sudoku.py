@@ -1,10 +1,52 @@
 import cv2
 import numpy as np
 
+from shapely.geometry import LineString
+
 
 class Sudoku:
     def __init__(self):
         pass
+
+    def detect_lines(self, img):
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # edges = cv2.Canny(gray, 50, 200)
+        edges = cv2.Canny(gray, 50, 200, apertureSize=3)
+        # cv2.imshow('edges_canny', edges)
+        # cv2.waitKey(0)
+
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=3)
+        # cv2.imshow('edges_dilate', edges)
+        # cv2.waitKey(0)
+
+        # kernel = np.ones((3,3),np.uint8)
+        edges = cv2.erode(edges, kernel, iterations=3)
+        # cv2.imshow('edges_erode', edges)
+        # cv2.waitKey(0)
+
+        lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180, threshold=100,
+                                minLineLength=300, maxLineGap=5)
+        
+        # Add Hough parameters to the detected lines
+        hough_lines = []
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            theta = np.arctan2(y2 - y1, x1 - x2)
+            theta_deg = np.rad2deg(theta)
+            rho = x1 * np.sin(theta) + y1 * np.cos(theta)
+            hough_lines.append([x1, y1, x2, y2, theta, theta_deg, rho])
+        
+        for line in hough_lines:
+            print(line)
+            x1, y1, x2, y2, _, _, _ = line
+            cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
+        
+        cv2.imwrite('sudoku.png', img)
+        cv2.imshow('sudoku', img)
+        cv2.waitKey(0)
+
+        return hough_lines
 
     def merge_lines(self, lines):  # [x1, y1, x2, y2, theta, theta_deg, rho]
         # Sort lines by theta and rho
@@ -86,45 +128,33 @@ class Sudoku:
 
         return merged_lines
 
-    def detect_lines(self, img):
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # edges = cv2.Canny(gray, 50, 200)
-        edges = cv2.Canny(gray, 50, 200, apertureSize=3)
-        # cv2.imshow('edges_canny', edges)
-        # cv2.waitKey(0)
-
-        kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=3)
-        # cv2.imshow('edges_dilate', edges)
-        # cv2.waitKey(0)
-
-        # kernel = np.ones((3,3),np.uint8)
-        edges = cv2.erode(edges, kernel, iterations=3)
-        # cv2.imshow('edges_erode', edges)
-        # cv2.waitKey(0)
-
-        lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180, threshold=100,
-                                minLineLength=300, maxLineGap=5)
+    def filter_lines(self, lines):
+        # Remove lines that are not perpendicular on many other lines
+        # Alternatively, remove lines outside the largest connected component
+        filtered_lines = []
         
-        # Add Hough parameters to the detected lines
-        hough_lines = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            theta = np.arctan2(y2 - y1, x1 - x2)
-            theta_deg = np.rad2deg(theta)
-            rho = x1 * np.sin(theta) + y1 * np.cos(theta)
-            hough_lines.append([x1, y1, x2, y2, theta, theta_deg, rho])
-        
-        for line in hough_lines:
-            print(line)
-            x1, y1, x2, y2, _, _, _ = line
-            cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
-        
-        cv2.imwrite('sudoku.png', img)
-        cv2.imshow('sudoku', img)
-        cv2.waitKey(0)
+        for it1, line1 in enumerate(lines):
+            intersections = 0
+            linestring1 = LineString([(line1[0], line1[1]), (line1[2], line1[3])])
+            
+            for it2, line2 in enumerate(lines):
+                if it1 == it2:
+                    continue
+                
+                # Skip if lines don't intersect
+                linestring2 = LineString([(line2[0], line2[1]), (line2[2], line2[3])])
+                if not linestring1.intersects(linestring2):
+                    continue
+                
+                # Count intersections with perpendicular lines
+                if np.abs(np.abs(line1[5] - line2[5]) % 180 - 90) < 3:  # theta_deg
+                    intersections += 1
+            
+            # Keep line if it is perpendicular on many other lines
+            if intersections > 3:
+                filtered_lines.append(line1)
 
-        return hough_lines
+        return filtered_lines
 
 
 def main():
@@ -140,9 +170,10 @@ def main():
     
     lines = sudoku.detect_lines(img)
     merged_lines = sudoku.merge_lines(lines)
+    filtered_lines = sudoku.filter_lines(merged_lines)
     
     print('\n\n\nconverted\n\n')
-    for line in merged_lines:
+    for line in filtered_lines:
         print(line)
         x1, y1, x2, y2, _, theta_deg, _, axis = line
         
@@ -156,8 +187,8 @@ def main():
             print('orizontal')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
 
-    cv2.imshow('sudoku_merged', img)
-    cv2.imwrite('sudoku_merged.png', img)
+    cv2.imshow('sudoku_filtered', img)
+    cv2.imwrite('sudoku_filtered.png', img)
     cv2.waitKey(0)
 
 
