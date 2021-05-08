@@ -39,24 +39,15 @@ class Sudoku:
             rho = x1 * np.sin(theta) + y1 * np.cos(theta)
             hough_lines.append([x1, y1, x2, y2, theta, theta_deg, rho])
         
-        for line in hough_lines:
-            print(line)
-            x1, y1, x2, y2, _, _, _ = line
-            cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
-        
-        cv2.imwrite('sudoku.png', img)
-        cv2.imshow('sudoku', img)
-        cv2.waitKey(0)
-
         return hough_lines
 
     def merge_lines(self, lines):  # [x1, y1, x2, y2, theta, theta_deg, rho]
         # Sort lines by rho
         lines = sorted(lines, key=lambda line: line[-1])
         
-        print('\n\nSorted\n')
-        for line in lines:
-            print(line)
+        # print('\n\nSorted\n')
+        # for line in lines:
+        #     print(line)
         
         # Initialize all lines as ungrouped
         selected = np.zeros(len(lines), dtype=bool)
@@ -198,6 +189,44 @@ class Sudoku:
         x_botright, y_botright = points_matrix.max(axis=0)
         
         return x_topleft, y_topleft, x_botright, y_botright
+    
+    def is_cell_empty(self, img_patch):
+        pass
+    
+    def check_cells_content(self, img, x_topleft, y_topleft, x_botright, y_botright):
+        grid_H = y_botright - y_topleft
+        grid_W = x_botright - x_topleft
+        
+        cell_h = grid_H / 9
+        cell_w = grid_W / 9
+        
+        # Iterate the sudoku grid
+        for i in range(9):
+            for j in range(9):
+                # Top left coordinates of the cell
+                cell_x1 = x_topleft + j * cell_w
+                cell_y1 = y_topleft + i * cell_h
+                
+                # Bottom right coordinates of the cell
+                cell_x2 = cell_x1 + cell_w
+                cell_y2 = cell_y1 + cell_h
+                
+                # Shrink the cell to center the content and ignore eventual borders
+                # that have the same color intensity as the digits and can be detected
+                # as false positives
+                
+                alpha = 0.25
+                cell_x1 += alpha * cell_w 
+                cell_y1 += alpha* cell_h
+                cell_x2 -= alpha * cell_w
+                cell_y2 -= alpha * cell_h
+                
+                # Draw selected patch
+                blk = np.zeros(img.shape, np.uint8)
+                cv2.rectangle(img=blk, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)), color=(200, 200, 200), thickness=cv2.FILLED)
+                img = cv2.addWeighted(img, 1.0, blk, 0.25, 0)
+        
+        return img
 
 def main():
     sudoku = Sudoku()
@@ -211,22 +240,31 @@ def main():
     img = cv2.resize(img, dim, interpolation=cv2.INTER_CUBIC)
     
     lines = sudoku.detect_lines(img)
+    
+    for line in lines:
+        x1, y1, x2, y2, _, _, _ = line
+        cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
+        
+    cv2.imwrite('sudoku_hough.png', img)
+    cv2.imshow('sudoku_hough', img)
+    cv2.waitKey(0)
+    
     merged_lines = sudoku.merge_lines(lines)
     filtered_lines, intersection_points = sudoku.filter_lines(merged_lines)
     
-    print('\n\n\nconverted\n\n')
+    # print('\n\n\nconverted\n\n')
     for line in filtered_lines:
-        print(line)
+        # print(line)
         x1, y1, x2, y2, _, theta_deg, _, axis = line
         
         if np.abs(np.abs(theta_deg) % 90 - 45) < 5:
-            print('oblic') 
+            # print('oblic') 
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 0), 3)
         elif axis == 1:
-            print('vertical')
+            # print('vertical')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 3)
         elif axis == 0:
-            print('orizontal')
+            # print('orizontal')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
 
     for point in intersection_points:
@@ -261,7 +299,13 @@ def main():
 
     cv2.imshow('corners', img)
     cv2.imwrite('sudoku_corners.png', img)
-    cv2.waitKey(0)    
+    cv2.waitKey(0)
+    
+    img = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
+    cv2.imshow('cells', img)
+    cv2.imwrite('sudoku_cells.png', img)
+    cv2.waitKey(0)
+
 
 if __name__ == '__main__':
     main()
