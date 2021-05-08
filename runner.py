@@ -8,6 +8,7 @@ from os.path import isfile, exists, join, splitext
 from shapely import affinity
 
 from sudoku import Sudoku
+from jigsaw_sudoku import JigsawSudoku
 
 
 def solve_task1(img, filename, output_path):
@@ -77,6 +78,16 @@ def solve_task1(img, filename, output_path):
     cv2.imwrite(join(output_path, '{}_sudoku_s6_mask.png'.format(filename)), black_ink_mask)
 
 
+def solve_task2(img, filename, output_path):
+    sudoku = JigsawSudoku()
+    borders_mask = sudoku.solve(img)
+    
+    if borders_mask is None:
+        print(filename)
+    else:
+        cv2.imwrite(join(output_path, '{}_jigsaw_s1_border.png'.format(filename)), borders_mask)
+
+
 def main():
     input_path = 'assets/train/jigsaw'
     output_path = 'results/train/jigsaw'
@@ -98,7 +109,8 @@ def main():
         img = cv2.imread(img_path)
         
         # Run task
-        solve_task1(img, filename, output_path)
+        # solve_task1(img, filename, output_path)
+        solve_task2(img, filename, output_path)
 
 
 if __name__ == '__main__':
