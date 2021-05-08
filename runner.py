@@ -72,13 +72,14 @@ def solve_task1(img, filename, output_path):
 
     cv2.imwrite(join(output_path, '{}_sudoku_s4_corners.png'.format(filename)), img)
     
-    img = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
+    img, black_ink_mask = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
     cv2.imwrite(join(output_path, '{}_sudoku_s5_cells.png'.format(filename)), img)
+    cv2.imwrite(join(output_path, '{}_sudoku_s6_mask.png'.format(filename)), black_ink_mask)
 
 
 def main():
-    input_path = 'assets/train/classic'
-    output_path = 'results/train/classic'
+    input_path = 'assets/train/jigsaw'
+    output_path = 'results/train/jigsaw'
     
     if not exists(output_path):
         makedirs(output_path)

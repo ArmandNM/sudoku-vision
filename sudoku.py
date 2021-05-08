@@ -191,7 +191,11 @@ class Sudoku:
         return x_topleft, y_topleft, x_botright, y_botright
     
     def is_cell_empty(self, img_patch):
-        pass
+        n_positive_pixels = (img_patch != 0).sum()
+        n_negative_pixels = (img_patch == 0).sum()
+        
+        ink_ratio = n_positive_pixels / (n_positive_pixels + n_negative_pixels)
+        return ink_ratio < 0.07
     
     def check_cells_content(self, img, x_topleft, y_topleft, x_botright, y_botright):
         grid_H = y_botright - y_topleft
@@ -199,6 +203,10 @@ class Sudoku:
         
         cell_h = grid_H / 9
         cell_w = grid_W / 9
+        
+        lower_black = np.array([0, 0, 0])
+        upper_black = np.array([100, 100, 100])
+        black_ink_mask = cv2.inRange(img, lower_black, upper_black)
         
         # Iterate the sudoku grid
         for i in range(9):
@@ -221,12 +229,18 @@ class Sudoku:
                 cell_x2 -= alpha * cell_w
                 cell_y2 -= alpha * cell_h
                 
+                color = (0, 200, 10)
+                beta = 0.50
+                if self.is_cell_empty(black_ink_mask[int(cell_y1):int(cell_y2), int(cell_x1):int(cell_x2)]):
+                    color = (200, 200, 200)
+                    beta= 0.25
+                
                 # Draw selected patch
                 blk = np.zeros(img.shape, np.uint8)
-                cv2.rectangle(img=blk, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)), color=(200, 200, 200), thickness=cv2.FILLED)
-                img = cv2.addWeighted(img, 1.0, blk, 0.25, 0)
+                cv2.rectangle(img=blk, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)), color=color, thickness=cv2.FILLED)
+                img = cv2.addWeighted(img, 1.0, blk, beta, 0)
         
-        return img
+        return img, black_ink_mask
 
 def main():
     sudoku = Sudoku()
@@ -301,9 +315,13 @@ def main():
     cv2.imwrite('sudoku_corners.png', img)
     cv2.waitKey(0)
     
-    img = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
+    img, black_ink_mask = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
     cv2.imshow('cells', img)
     cv2.imwrite('sudoku_cells.png', img)
+    cv2.waitKey(0)
+    
+    cv2.imwrite('black_ink_mask.png', black_ink_mask)
+    cv2.imshow('black_ink_mask', black_ink_mask)
     cv2.waitKey(0)
 
 
