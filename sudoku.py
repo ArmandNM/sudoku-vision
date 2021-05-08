@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
+import imutils
 
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
+from shapely import affinity
 
 
 class Sudoku:
@@ -49,7 +51,7 @@ class Sudoku:
         return hough_lines
 
     def merge_lines(self, lines):  # [x1, y1, x2, y2, theta, theta_deg, rho]
-        # Sort lines by theta and rho
+        # Sort lines by rho
         lines = sorted(lines, key=lambda line: line[-1])
         
         print('\n\nSorted\n')
@@ -124,7 +126,7 @@ class Sudoku:
             theta = np.arctan2(y2 - y1, x1 - x2)
             theta_deg = np.rad2deg(theta)
             rho = x1 * np.sin(theta) + y1 * np.cos(theta)
-            merged_lines.append([x1, y1, x2, y2, theta, theta_deg, rho, closest_axis])
+            merged_lines.append([x1, y1, x2, y2, theta, rotation, rho, closest_axis])
 
         return merged_lines
 
@@ -161,12 +163,40 @@ class Sudoku:
 
         return filtered_lines, intersection_points
     
+    def determine_grid_rotation(self, lines):
+        # Sort lines by theta
+        lines = sorted(lines, key=lambda line: line[5])  # theta_deg
+        
+        grouped_lines = []
+        # grouped_lines.append(np.empty((0, 8)))
+        # grouped_lines[0] = np.append(grouped_lines[0], np.array([lines[0]]), axis=0)
+        grouped_lines.append(np.array([lines[0]]))
+        
+        for line in lines[1:]:
+            # Group lines with similar theta_deg
+            if np.abs(line[5] - grouped_lines[-1][0, 5]) < 3:
+                grouped_lines[-1] = np.append(grouped_lines[-1], np.array([line]), axis=0)
+            else:
+                grouped_lines.append(np.array([line]))
+        
+        assert len(grouped_lines) == 2
+        # if len(grouped_lines) != 2:
+        #     print('Something is not right!')
+
+        # Take the rotation on the horizontal axis
+        if grouped_lines[0][0, -1] == 0:
+            grid_rotation = grouped_lines[0][:, 5].mean()
+        elif grouped_lines[1][0, -1] == 0:
+            grid_rotation = grouped_lines[1][:, 5].mean()
+        
+        return grid_rotation
+    
     def determine_corners(self, intersection_points):
         pass
 
 def main():
     sudoku = Sudoku()
-    img = cv2.imread('assets/train/classic/5.jpg')
+    img = cv2.imread('assets/train/classic/35.jpg')
     # img = cv2.imread('assets/custom/test_lines.jpg')
     
     scale_percent = 20 # percent of original size
@@ -199,6 +229,38 @@ def main():
 
     cv2.imshow('sudoku_filtered_dots', img)
     cv2.imwrite('sudoku_filtered_dots.png', img)
+    cv2.waitKey(0)
+    
+    horizontal_rotation = sudoku.determine_grid_rotation(filtered_lines)
+    
+    img = imutils.rotate(img, angle=-horizontal_rotation)
+    
+    (h, w) = img.shape[:2]
+    (center_x, center_y) = (w / 2, h / 2)
+    
+    # M = cv2.getRotationMatrix2D((center_x, center_y), horizontal_rotation, 1.0)
+    # cos = np.abs(M[0, 0])
+    # sin = np.abs(M[0, 1])
+
+    # # compute the new bounding dimensions of the image
+    # nW = int((h * sin) + (w * cos))
+    # nH = int((h * cos) + (w * sin))
+    
+    # delta_x = (nW - w) / 2
+    # delta_y = (nH - h) / 2
+    
+    # # (center_x, center_y) = (nW / 2, nH / 2)
+    
+    intersection_points = list(map(lambda point: affinity.rotate(point, angle=horizontal_rotation, origin=(center_x, center_y)),
+                                   intersection_points))
+    
+    # intersection_points = list(map(lambda point: Point(point.x + delta_x, point.y + delta_y), intersection_points)) 
+    
+    for point in intersection_points:
+        cv2.circle(img, (int(point.x), int(point.y)), radius=5, color=(200, 150, 70), thickness=-5)
+    
+    cv2.imshow('rotated', img)
+    cv2.imwrite('rotated.png', img)
     cv2.waitKey(0)
 
 
