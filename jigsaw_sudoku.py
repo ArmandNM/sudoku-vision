@@ -57,8 +57,77 @@ class JigsawSudoku(Sudoku):
         
         return borders_mask
     
-    def separate_regions(self, borders_mask, x_topleft, y_topleft, x_botright, y_botright):
-        pass
+    def update_matrix(self, matrix):
+        matrix[0, 0] = 1
+    
+    def separate_regions(self, clean_img, borders_mask, x_topleft, y_topleft, x_botright, y_botright):
+        def _dfs(x, y, regions, n_regions):
+            dx = [0, 1, 0, -1]
+            dy = [1, 0, -1, 0]
+            
+            # Mark current cell as visited
+            regions[y, x] = n_regions
+            
+            # Move recursively to neighbours
+            for i in range(4):
+                new_x = x + dx[i]
+                new_y = y + dy[i]
+                
+                # Don't move outside the grid
+                if new_x < 0 or new_x >= 9:
+                    continue
+                if new_y < 0 or new_y >= 9:
+                    continue
+                
+                # Check if there is a border between
+                center1_x = x_topleft + (x + 0.5) * cell_w
+                center1_y = y_topleft + (y + 0.5) * cell_h
+                
+                center2_x = x_topleft + (new_x + 0.5) * cell_w
+                center2_y = y_topleft + (new_y + 0.5) * cell_h
+                
+                if int(center1_x) > int(center2_x) or int(center1_y) > int(center2_y):
+                    center1_x, center1_y, center2_x, center2_y = center2_x, center2_y, center1_x, center1_y
+                
+                if i in [0, 2]:  # vertical movement
+                    passing_bar = borders_mask[int(center1_y):int(center2_y), int(center1_x-5):int(center2_x+5)]
+                    clean_img[int(center1_y):int(center2_y), int(center1_x-5):int(center2_x+5)] = 255
+                    print(passing_bar.shape)
+                else:  # horizontal movement
+                    passing_bar = borders_mask[int(center1_y-5):int(center2_y+5), int(center1_x):int(center2_x)]
+                    clean_img[int(center1_y-5):int(center2_y+5), int(center1_x):int(center2_x)] = 255
+                    print(passing_bar.shape)
+                
+                # cv2.imshow('midline', clean_img)
+                # cv2.waitKey(0)
+                border_ratio = (passing_bar != 0).sum() / (passing_bar.shape[0] * passing_bar.shape[1])
+                
+                # Don't move forward if cells are delimited by jigsaw border
+                if border_ratio > 0.0:
+                    print(border_ratio)
+                    continue
+                
+                # Move to next unvisited cell
+                if regions[new_y, new_x] == 0:
+                    _dfs(new_x, new_y, regions, n_regions)
+        
+        grid_H = y_botright - y_topleft
+        grid_W = x_botright - x_topleft
+        
+        cell_h = grid_H / 9
+        cell_w = grid_W / 9
+        
+        n_regions = 0
+        regions = np.zeros((9, 9))  
+        
+        for j in range(9):
+            for i in range(9):
+                if regions[j, i] == 0:
+                    n_regions += 1
+                    _dfs(i, j, regions, n_regions)
+                    print(regions)
+    
+        print('done')
     
     def solve(self, img):
         img = self.resize_image(img, scale_percent=20)
@@ -88,12 +157,14 @@ class JigsawSudoku(Sudoku):
         
         borders_mask = self.extract_borders(clean_img, x_topleft, y_topleft, x_botright, y_botright)
         
+        self.separate_regions(clean_img, borders_mask, x_topleft, y_topleft, x_botright, y_botright)
+        
         return borders_mask
         
 
 def main():
     sudoku = JigsawSudoku()
-    img = cv2.imread('assets/train/jigsaw/19.jpg')
+    img = cv2.imread('assets/train/jigsaw/35.jpg')
     sudoku.solve(img)
 
 
