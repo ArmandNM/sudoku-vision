@@ -132,6 +132,7 @@ class Sudoku:
         # Remove lines that are not perpendicular on many other lines
         # Alternatively, remove lines outside the largest connected component
         filtered_lines = []
+        intersection_points = []
         
         for it1, line1 in enumerate(lines):
             intersections = 0
@@ -149,13 +150,19 @@ class Sudoku:
                 # Count intersections with perpendicular lines
                 if np.abs(np.abs(line1[5] - line2[5]) % 180 - 90) < 3:  # theta_deg
                     intersections += 1
+                
+                # Save unique intersection points
+                if it2 > it1:
+                    intersection_points.append(linestring1.intersection(linestring2))
             
             # Keep line if it is perpendicular on many other lines
             if intersections > 3:
                 filtered_lines.append(line1)
 
-        return filtered_lines
-
+        return filtered_lines, intersection_points
+    
+    def determine_corners(self, intersection_points):
+        pass
 
 def main():
     sudoku = Sudoku()
@@ -170,7 +177,7 @@ def main():
     
     lines = sudoku.detect_lines(img)
     merged_lines = sudoku.merge_lines(lines)
-    filtered_lines = sudoku.filter_lines(merged_lines)
+    filtered_lines, intersection_points = sudoku.filter_lines(merged_lines)
     
     print('\n\n\nconverted\n\n')
     for line in filtered_lines:
@@ -187,8 +194,11 @@ def main():
             print('orizontal')
             cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
 
-    cv2.imshow('sudoku_filtered', img)
-    cv2.imwrite('sudoku_filtered.png', img)
+    for point in intersection_points:
+        cv2.circle(img, (int(point.x), int(point.y)), radius=7, color=(70, 230, 70), thickness=-7)
+
+    cv2.imshow('sudoku_filtered_dots', img)
+    cv2.imwrite('sudoku_filtered_dots.png', img)
     cv2.waitKey(0)
 
 
