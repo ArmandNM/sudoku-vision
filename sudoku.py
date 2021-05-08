@@ -192,7 +192,12 @@ class Sudoku:
         return grid_rotation
     
     def determine_corners(self, intersection_points):
-        pass
+        points_matrix = np.array(list(map(lambda point: [point.x, point.y], intersection_points)))
+        
+        x_topleft, y_topleft = points_matrix.min(axis=0)
+        x_botright, y_botright = points_matrix.max(axis=0)
+        
+        return x_topleft, y_topleft, x_botright, y_botright
 
 def main():
     sudoku = Sudoku()
@@ -238,31 +243,25 @@ def main():
     (h, w) = img.shape[:2]
     (center_x, center_y) = (w / 2, h / 2)
     
-    # M = cv2.getRotationMatrix2D((center_x, center_y), horizontal_rotation, 1.0)
-    # cos = np.abs(M[0, 0])
-    # sin = np.abs(M[0, 1])
-
-    # # compute the new bounding dimensions of the image
-    # nW = int((h * sin) + (w * cos))
-    # nH = int((h * cos) + (w * sin))
-    
-    # delta_x = (nW - w) / 2
-    # delta_y = (nH - h) / 2
-    
-    # # (center_x, center_y) = (nW / 2, nH / 2)
-    
     intersection_points = list(map(lambda point: affinity.rotate(point, angle=horizontal_rotation, origin=(center_x, center_y)),
                                    intersection_points))
-    
-    # intersection_points = list(map(lambda point: Point(point.x + delta_x, point.y + delta_y), intersection_points)) 
-    
+        
     for point in intersection_points:
         cv2.circle(img, (int(point.x), int(point.y)), radius=5, color=(200, 150, 70), thickness=-5)
     
     cv2.imshow('rotated', img)
-    cv2.imwrite('rotated.png', img)
+    cv2.imwrite('sudoku_rotated.png', img)
     cv2.waitKey(0)
 
+    x_topleft, y_topleft, x_botright, y_botright = sudoku.determine_corners(intersection_points)
+    cv2.circle(img, (int(x_topleft), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
+    cv2.circle(img, (int(x_topleft), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
+    cv2.circle(img, (int(x_botright), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
+    cv2.circle(img, (int(x_botright), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
+
+    cv2.imshow('corners', img)
+    cv2.imwrite('sudoku_corners.png', img)
+    cv2.waitKey(0)    
 
 if __name__ == '__main__':
     main()
