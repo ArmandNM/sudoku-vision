@@ -52,19 +52,31 @@ def solve_task1(img, filename, output_path):
     grid, _ = sudoku.solve(img, filename, output_path)
     
     if grid is None:
-        return
-    
-    _write_result(grid, join(output_path, '{}_predicted.txt'.format(filename)))
+        print(filename)
+    else:
+        _write_result(grid, join(output_path, '{}_predicted.txt'.format(filename)))
 
 
 def solve_task2(img, filename, output_path):
-    sudoku = JigsawSudoku()
-    borders_mask = sudoku.solve(img, filename, output_path)
+    def _write_result(grid, regions, filepath):
+        with open(filepath, 'w') as f:
+            for i in range(9):
+                crt_line = ''
+                for j in range(9):
+                    crt_line += str(int(regions[i, j]))
+                    if grid[i, j] != 0:
+                        crt_line += 'x'
+                    else:
+                        crt_line += 'o'
+                f.write(crt_line + '\n')
     
-    if borders_mask is None:
+    sudoku = JigsawSudoku()
+    grid, regions = sudoku.solve(img, filename, output_path)
+    
+    if grid is None:
         print(filename)
     else:
-        cv2.imwrite(join(output_path, '{}_jigsaw_s1_border.png'.format(filename)), borders_mask)
+        _write_result(grid, regions, join(output_path, '{}_predicted.txt'.format(filename)))
 
 
 def main():

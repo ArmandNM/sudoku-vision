@@ -7,6 +7,8 @@ from os.path import join
 from shapely.geometry import LineString, Point
 from shapely import affinity
 
+DEBUG_IMAGES = True
+
 
 class Sudoku:
     def __init__(self):
@@ -203,7 +205,7 @@ class Sudoku:
         n_negative_pixels = (img_patch == 0).sum()
         
         ink_ratio = n_positive_pixels / (n_positive_pixels + n_negative_pixels)
-        return ink_ratio < 0.07
+        return ink_ratio < 0.045
     
     def check_cells_content(self, img, x_topleft, y_topleft, x_botright, y_botright):
         grid_H = y_botright - y_topleft
@@ -213,7 +215,7 @@ class Sudoku:
         cell_w = grid_W / 9
         
         lower_black = np.array([0, 0, 0])
-        upper_black = np.array([100, 100, 100])
+        upper_black = np.array([90, 90, 90])
         black_ink_mask = cv2.inRange(img, lower_black, upper_black)
         
         grid = np.zeros((9, 9))
@@ -338,10 +340,10 @@ class Sudoku:
 
 def main():
     sudoku = Sudoku()
-    img = cv2.imread('datasets/train/classic/35.jpg')
+    img = cv2.imread('datasets/train/classic/9.jpg')
     # img = cv2.imread('assets/custom/test_lines.jpg')
     
-    sudoku.solve(img, '35', './')
+    sudoku.solve(img, '9', './')
 
 
 if __name__ == '__main__':

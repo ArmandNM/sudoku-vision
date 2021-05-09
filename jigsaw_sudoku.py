@@ -2,9 +2,13 @@ import cv2
 import numpy as np
 import imutils
 
+from os.path import join
+
 from shapely import affinity
 
 from sudoku import Sudoku
+
+DEBUG_IMAGES = False
 
 
 class JigsawSudoku(Sudoku):
@@ -22,8 +26,9 @@ class JigsawSudoku(Sudoku):
         upper_black = np.array([100, 100, 100])
         borders_mask = cv2.inRange(img, lower_black, upper_black)
         
-        # cv2.imshow('borders', borders_mask)
-        # cv2.waitKey(0)
+        if DEBUG_IMAGES:
+            cv2.imshow('borders', borders_mask)
+            cv2.waitKey(0)
         
         # Determine jigsaw type (colored or uncolored)
         # Colored has thicker borders and needs more erosion
@@ -35,10 +40,11 @@ class JigsawSudoku(Sudoku):
         if gray_percent > 0.7:
             iterations = 12
         else:
-            iterations = 16
+            iterations = 15
         
-        # cv2.imshow('center', center_rect)
-        # cv2.waitKey(0)
+        if DEBUG_IMAGES:
+            cv2.imshow('center', center_rect)
+            cv2.waitKey(0)
         
         # Erode thin lines
         bigger_borders_mask = self.resize_image(borders_mask, scale_percent=800)
@@ -46,14 +52,19 @@ class JigsawSudoku(Sudoku):
         bigger_borders_mask = cv2.erode(bigger_borders_mask, kernel, iterations=iterations)
         borders_mask = cv2.resize(bigger_borders_mask, (borders_mask.shape[1], borders_mask.shape[0]), interpolation=cv2.INTER_CUBIC)
         
+        if DEBUG_IMAGES:
+            cv2.imshow('after erode', borders_mask)
+            cv2.waitKey(0)
+        
         # Pick largest connected components 
         nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(borders_mask, connectivity=4)
         max_label, max_size = max([(i, stats[i, cv2.CC_STAT_AREA]) for i in range(1, nb_components)], key=lambda x: x[1])
         
         borders_mask = 255 * (output == max_label).astype(np.uint8)
         
-        # cv2.imshow('borders_largest', borders_mask)
-        # cv2.waitKey(0)
+        if DEBUG_IMAGES:
+            cv2.imshow('borders_largest', borders_mask)
+            cv2.waitKey(0)
         
         return borders_mask
     
@@ -92,11 +103,11 @@ class JigsawSudoku(Sudoku):
                 if i in [0, 2]:  # vertical movement
                     passing_bar = borders_mask[int(center1_y):int(center2_y), int(center1_x-5):int(center2_x+5)]
                     clean_img[int(center1_y):int(center2_y), int(center1_x-5):int(center2_x+5)] = 255
-                    print(passing_bar.shape)
+                    # print(passing_bar.shape)
                 else:  # horizontal movement
                     passing_bar = borders_mask[int(center1_y-5):int(center2_y+5), int(center1_x):int(center2_x)]
                     clean_img[int(center1_y-5):int(center2_y+5), int(center1_x):int(center2_x)] = 255
-                    print(passing_bar.shape)
+                    # print(passing_bar.shape)
                 
                 # cv2.imshow('midline', clean_img)
                 # cv2.waitKey(0)
@@ -104,7 +115,7 @@ class JigsawSudoku(Sudoku):
                 
                 # Don't move forward if cells are delimited by jigsaw border
                 if border_ratio > 0.0:
-                    print(border_ratio)
+                    # print(border_ratio)
                     continue
                 
                 # Move to next unvisited cell
@@ -125,11 +136,13 @@ class JigsawSudoku(Sudoku):
                 if regions[j, i] == 0:
                     n_regions += 1
                     _dfs(i, j, regions, n_regions)
-                    print(regions)
     
-        print('done')
+        return regions
     
-    def solve(self, img):
+    def solve(self, img, filename, output_path):
+        # Get grid cells with digits from Task 1
+        grid, detected_digits_img = super().solve(img.copy(), filename, output_path)
+        
         img = self.resize_image(img, scale_percent=20)
         clean_img = img.copy()
         
@@ -141,8 +154,7 @@ class JigsawSudoku(Sudoku):
             horizontal_rotation = self.determine_grid_rotation(filtered_lines)
         except Exception:
             # print(filename)
-            return None
-        
+            return None, None
         
         img = imutils.rotate(img, angle=-horizontal_rotation)
         clean_img = imutils.rotate(clean_img, angle=-horizontal_rotation)
@@ -156,16 +168,19 @@ class JigsawSudoku(Sudoku):
         x_topleft, y_topleft, x_botright, y_botright = self.determine_corners(intersection_points)
         
         borders_mask = self.extract_borders(clean_img, x_topleft, y_topleft, x_botright, y_botright)
+        cv2.imwrite(join(output_path, '{}_sudoku_s8_jigsaw_border.png'.format(filename)), borders_mask)
         
-        self.separate_regions(clean_img, borders_mask, x_topleft, y_topleft, x_botright, y_botright)
+        regions = self.separate_regions(clean_img, borders_mask, x_topleft, y_topleft, x_botright, y_botright)
         
-        return borders_mask
-        
+        return grid, regions
+
 
 def main():
     sudoku = JigsawSudoku()
-    img = cv2.imread('assets/train/jigsaw/35.jpg')
-    sudoku.solve(img)
+    img = cv2.imread('datasets/train/jigsaw/15.jpg')
+    grid, regions = sudoku.solve(img, '15jig', './')
+    print(grid)
+    print(regions)
 
 
 if __name__ == '__main__':
