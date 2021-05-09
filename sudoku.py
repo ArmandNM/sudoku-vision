@@ -260,18 +260,6 @@ class Sudoku:
         
         return grid, identified_cells, black_ink_mask, detected_digits
 
-    def write_result(self, grid, filepath):
-        with open(filepath, 'w') as f:
-            for i in range(9):
-                crt_line = ''
-                for j in range(9):
-                    if grid[i, j] != 0:
-                        crt_line += 'x'
-                    else:
-                        crt_line += 'o'
-                f.write(crt_line + '\n')
-        
-
     def solve(self, img, filename, output_path):
         img = self.resize_image(img, scale_percent=20)
         
@@ -311,7 +299,7 @@ class Sudoku:
             horizontal_rotation = self.determine_grid_rotation(filtered_lines)
         except Exception:
             print(filename)
-            return
+            return None, None
         
         # Rotate image around center to be aligned with Ox and Oy axes
         img = imutils.rotate(img, angle=-horizontal_rotation)
@@ -344,8 +332,8 @@ class Sudoku:
         cv2.imwrite(join(output_path, '{}_sudoku_s5_cells.png'.format(filename)), identified_cells)
         cv2.imwrite(join(output_path, '{}_sudoku_s6_mask.png'.format(filename)), black_ink_mask)
         cv2.imwrite(join(output_path, '{}_sudoku_s7_digits.png'.format(filename)), detected_digits)
-        
-        self.write_result(grid, join(output_path, '{}_predicted.txt'.format(filename)))
+                
+        return grid, detected_digits
 
 
 def main():

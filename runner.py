@@ -31,22 +31,35 @@ def check(gt_path, prediction_path):
     
     correct = True
     for line in diff:
-        # sys.stdout.write(line)
         correct = False
     
-    # if not correct:
-    #     print('_______ :(')
     return correct
 
 
 def solve_task1(img, filename, output_path):
-    sudoku = Sudoku()
-    sudoku.solve(img, filename, output_path)
+    def _write_result(grid, filepath):
+        with open(filepath, 'w') as f:
+            for i in range(9):
+                crt_line = ''
+                for j in range(9):
+                    if grid[i, j] != 0:
+                        crt_line += 'x'
+                    else:
+                        crt_line += 'o'
+                f.write(crt_line + '\n')
+    
+    sudoku = Sudoku()    
+    grid, _ = sudoku.solve(img, filename, output_path)
+    
+    if grid is None:
+        return
+    
+    _write_result(grid, join(output_path, '{}_predicted.txt'.format(filename)))
 
 
 def solve_task2(img, filename, output_path):
     sudoku = JigsawSudoku()
-    borders_mask = sudoku.solve(img)
+    borders_mask = sudoku.solve(img, filename, output_path)
     
     if borders_mask is None:
         print(filename)
