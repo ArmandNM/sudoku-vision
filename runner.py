@@ -81,9 +81,9 @@ def solve_task2(img, filename, output_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', default='datasets/train/classic')
-    parser.add_argument('--output_path', default='results/train/classic')
-    parser.add_argument('--task', default=1)
+    parser.add_argument('--input_path', default='datasets/train/jigsaw')
+    parser.add_argument('--output_path', default='results/train/jigsaw')
+    parser.add_argument('--task', default=2)
     args = parser.parse_args()
     
     print(args)

@@ -141,12 +141,12 @@ class JigsawSudoku(Sudoku):
     
     def solve(self, img, filename, output_path):
         # Get grid cells with digits from Task 1
-        grid, detected_digits_img = super().solve(img.copy(), filename, output_path)
+        grid, detected_digits_img = super().solve(img.copy(), filename, output_path, jiggy=True)
         
         img = self.resize_image(img, scale_percent=20)
         clean_img = img.copy()
         
-        lines = self.detect_lines(img)
+        lines = self.detect_lines(img, filter_non_black=False)
         merged_lines = self.merge_lines(lines)
         filtered_lines, intersection_points = self.filter_lines(merged_lines)
         

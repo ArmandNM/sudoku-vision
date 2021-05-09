@@ -7,7 +7,7 @@ from os.path import join
 from shapely.geometry import LineString, Point
 from shapely import affinity
 
-DEBUG_IMAGES = True
+DEBUG_IMAGES = False
 
 
 class Sudoku:
@@ -20,12 +20,31 @@ class Sudoku:
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
         return img
 
-    def detect_lines(self, img):
+    def detect_lines(self, img, filter_non_black=True):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # edges = cv2.Canny(gray, 50, 200)
         edges = cv2.Canny(gray, 50, 200, apertureSize=3)
-        # cv2.imshow('edges_canny', edges)
-        # cv2.waitKey(0)
+        
+        if DEBUG_IMAGES:
+            cv2.imshow('edges', edges)
+            cv2.waitKey()
+        
+        # Remove edges for non-black regions
+        if filter_non_black:
+            lower_black = np.array([0, 0, 0])
+            upper_black = np.array([100, 100, 100])
+            black_ink_mask = cv2.inRange(img, lower_black, upper_black)
+            kernel = np.ones((3, 3), np.uint8)
+            black_ink_mask = cv2.dilate(black_ink_mask, kernel, iterations=3)
+            edges[black_ink_mask == 0] = 0
+
+        if DEBUG_IMAGES:
+            cv2.imshow('black mask', black_ink_mask)
+            cv2.waitKey()
+
+        if DEBUG_IMAGES:
+            cv2.imshow('filtered edges', edges)
+            cv2.waitKey()
 
         kernel = np.ones((3, 3), np.uint8)
         edges = cv2.dilate(edges, kernel, iterations=3)
@@ -262,11 +281,11 @@ class Sudoku:
         
         return grid, identified_cells, black_ink_mask, detected_digits
 
-    def solve(self, img, filename, output_path):
+    def solve(self, img, filename, output_path, jiggy=False):
         img = self.resize_image(img, scale_percent=20)
         
         # Hough lines detection
-        lines = self.detect_lines(img)
+        lines = self.detect_lines(img, filter_non_black=not jiggy)
         
         for line in lines:
             x1, y1, x2, y2, _, _, _ = line
@@ -340,10 +359,10 @@ class Sudoku:
 
 def main():
     sudoku = Sudoku()
-    img = cv2.imread('datasets/train/classic/9.jpg')
+    img = cv2.imread('datasets/train/classic/24.jpg')
     # img = cv2.imread('assets/custom/test_lines.jpg')
     
-    sudoku.solve(img, '9', './')
+    sudoku.solve(img, '24', './')
 
 
 if __name__ == '__main__':
