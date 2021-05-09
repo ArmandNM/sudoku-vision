@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 import imutils
+import argparse
+import difflib
+import sys
 
 from os import listdir, makedirs
 from os.path import isfile, exists, join, splitext
@@ -11,71 +14,34 @@ from sudoku import Sudoku
 from jigsaw_sudoku import JigsawSudoku
 
 
+RUN_CHECKER = True
+
+
+def check(gt_path, prediction_path):
+    with open(prediction_path, 'r') as f:
+        pred = f.readlines()
+    with open(gt_path, 'r') as f:
+        gt = f.readlines()
+        
+    # Remove newlines
+    pred = [line.strip() for line in pred]
+    gt = [line.strip() for line in gt]
+        
+    diff = difflib.unified_diff(pred, gt, fromfile=prediction_path, tofile=gt_path)
+    
+    correct = True
+    for line in diff:
+        # sys.stdout.write(line)
+        correct = False
+    
+    # if not correct:
+    #     print('_______ :(')
+    return correct
+
+
 def solve_task1(img, filename, output_path):
     sudoku = Sudoku()
-    
-    scale_percent = 20 # percent of original size
-    width = int(img.shape[1] * scale_percent / 100)
-    height = int(img.shape[0] * scale_percent / 100)
-    dim = (width, height)
-    img = cv2.resize(img, dim, interpolation=cv2.INTER_CUBIC)
-    
-    lines = sudoku.detect_lines(img)
-    
-    for line in lines:
-        x1, y1, x2, y2, _, _, _ = line
-        cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
-        
-    cv2.imwrite(join(output_path, '{}_sudoku_s1_hough.png'.format(filename)), img)
-    
-    merged_lines = sudoku.merge_lines(lines)
-    filtered_lines, intersection_points = sudoku.filter_lines(merged_lines)
-    
-    for line in filtered_lines:
-        x1, y1, x2, y2, _, theta_deg, _, axis = line
-        
-        if np.abs(np.abs(theta_deg) % 90 - 45) < 5:
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 0), 3)
-        elif axis == 1:
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 3)
-        elif axis == 0:
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
-
-    for point in intersection_points:
-        cv2.circle(img, (int(point.x), int(point.y)), radius=7, color=(70, 230, 70), thickness=-7)
-
-    cv2.imwrite(join(output_path, '{}_sudoku_s2_filtered_and_dots.png'.format(filename)), img)
-    
-    try:
-        horizontal_rotation = sudoku.determine_grid_rotation(filtered_lines)
-    except Exception:
-        print(filename)
-        return
-    
-    img = imutils.rotate(img, angle=-horizontal_rotation)
-    
-    (h, w) = img.shape[:2]
-    (center_x, center_y) = (w / 2, h / 2)
-    
-    intersection_points = list(map(lambda point: affinity.rotate(point, angle=horizontal_rotation, origin=(center_x, center_y)),
-                                   intersection_points))
-        
-    for point in intersection_points:
-        cv2.circle(img, (int(point.x), int(point.y)), radius=5, color=(200, 150, 70), thickness=-5)
-    
-    cv2.imwrite(join(output_path, '{}_sudoku_s3_rotated.png'.format(filename)), img)
-
-    x_topleft, y_topleft, x_botright, y_botright = sudoku.determine_corners(intersection_points)
-    cv2.circle(img, (int(x_topleft), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_topleft), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_botright), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_botright), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
-
-    cv2.imwrite(join(output_path, '{}_sudoku_s4_corners.png'.format(filename)), img)
-    
-    img, black_ink_mask = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
-    cv2.imwrite(join(output_path, '{}_sudoku_s5_cells.png'.format(filename)), img)
-    cv2.imwrite(join(output_path, '{}_sudoku_s6_mask.png'.format(filename)), black_ink_mask)
+    sudoku.solve(img, filename, output_path)
 
 
 def solve_task2(img, filename, output_path):
@@ -89,14 +55,27 @@ def solve_task2(img, filename, output_path):
 
 
 def main():
-    input_path = 'assets/train/jigsaw'
-    output_path = 'results/train/jigsaw'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', default='datasets/train/classic')
+    parser.add_argument('--output_path', default='results/train/classic')
+    parser.add_argument('--task', default=1)
+    args = parser.parse_args()
     
-    if not exists(output_path):
-        makedirs(output_path)
+    print(args)
     
-    for file in listdir(input_path):
-        img_path = join(input_path, file)
+    assert args.task in [1, 2, 3]
+    
+    tasks = [solve_task1, solve_task2]
+    
+    if not exists(args.output_path):
+        makedirs(args.output_path)
+    
+    if RUN_CHECKER:
+        total_tests = 0
+        correct_tests = 0
+    
+    for file in listdir(args.input_path):
+        img_path = join(args.input_path, file)
         if not isfile(img_path):
             continue
         
@@ -109,9 +88,24 @@ def main():
         img = cv2.imread(img_path)
         
         # Run task
-        # solve_task1(img, filename, output_path)
-        solve_task2(img, filename, output_path)
+        tasks[args.task - 1](img, filename, args.output_path)
+        
+        # Compare with gt
+        if RUN_CHECKER:
+            total_tests += 1
+            try:
+                if check(gt_path=join(args.input_path, '{}_gt.txt'.format(filename)),
+                        prediction_path=join(args.output_path, '{}_predicted.txt'.format(filename))):
+                    print(f'Test {filename} is correct!')
+                    correct_tests += 1
+                else:
+                    print(f'\nErrors in test {filename}!\n')
+            except:
+                print(f'\nErrors in test {filename}!\n')
 
+
+    if RUN_CHECKER:
+        print(f'Summary: you got {correct_tests}/{total_tests} correct tests.')
 
 if __name__ == '__main__':
     main()

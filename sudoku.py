@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import imutils
 
+from os.path import join
+
 from shapely.geometry import LineString, Point
 from shapely import affinity
 
@@ -9,6 +11,12 @@ from shapely import affinity
 class Sudoku:
     def __init__(self):
         pass
+
+    def resize_image(self, img, scale_percent=20):
+        width = int(img.shape[1] * scale_percent / 100)
+        height = int(img.shape[0] * scale_percent / 100)
+        img = cv2.resize(img, (width, height), interpolation=cv2.INTER_CUBIC)
+        return img
 
     def detect_lines(self, img):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -208,6 +216,11 @@ class Sudoku:
         upper_black = np.array([100, 100, 100])
         black_ink_mask = cv2.inRange(img, lower_black, upper_black)
         
+        grid = np.zeros((9, 9))
+        
+        identified_cells = img.copy()
+        detected_digits = img.copy()
+        
         # Iterate the sudoku grid
         for i in range(9):
             for j in range(9):
@@ -222,107 +235,125 @@ class Sudoku:
                 # Shrink the cell to center the content and ignore eventual borders
                 # that have the same color intensity as the digits and can be detected
                 # as false positives
-                
                 alpha = 0.25
                 cell_x1 += alpha * cell_w 
                 cell_y1 += alpha* cell_h
                 cell_x2 -= alpha * cell_w
                 cell_y2 -= alpha * cell_h
                 
-                color = (0, 200, 10)
-                beta = 0.50
-                if self.is_cell_empty(black_ink_mask[int(cell_y1):int(cell_y2), int(cell_x1):int(cell_x2)]):
-                    color = (200, 200, 200)
-                    beta= 0.25
-                
                 # Draw selected patch
-                blk = np.zeros(img.shape, np.uint8)
-                cv2.rectangle(img=blk, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)), color=color, thickness=cv2.FILLED)
-                img = cv2.addWeighted(img, 1.0, blk, beta, 0)
+                patch_color_empty = np.zeros(img.shape, np.uint8)
+                cv2.rectangle(img=patch_color_empty, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)),
+                              color=(200, 200, 200), thickness=cv2.FILLED)
+                
+                identified_cells = cv2.addWeighted(identified_cells, 1.0, patch_color_empty, 0.25, 0)
+                
+                # Check if cell contains a digit
+                if self.is_cell_empty(black_ink_mask[int(cell_y1):int(cell_y2), int(cell_x1):int(cell_x2)]):
+                    detected_digits = cv2.addWeighted(detected_digits, 1.0, patch_color_empty, 0.25, 0)
+                else:
+                    grid[i, j] = 1  # save detection
+                    patch_color_non_empty = np.zeros(img.shape, np.uint8)
+                    cv2.rectangle(img=patch_color_non_empty, pt1=(int(cell_x1), int(cell_y1)), pt2=(int(cell_x2), int(cell_y2)),
+                              color=(0, 200, 10), thickness=cv2.FILLED)
+                    detected_digits = cv2.addWeighted(detected_digits, 1.0, patch_color_non_empty, 0.50, 0)
         
-        return img, black_ink_mask
+        return grid, identified_cells, black_ink_mask, detected_digits
+
+    def write_result(self, grid, filepath):
+        with open(filepath, 'w') as f:
+            for i in range(9):
+                crt_line = ''
+                for j in range(9):
+                    if grid[i, j] != 0:
+                        crt_line += 'x'
+                    else:
+                        crt_line += 'o'
+                f.write(crt_line + '\n')
+        
+
+    def solve(self, img, filename, output_path):
+        img = self.resize_image(img, scale_percent=20)
+        
+        # Hough lines detection
+        lines = self.detect_lines(img)
+        
+        for line in lines:
+            x1, y1, x2, y2, _, _, _ = line
+            cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
+            
+        cv2.imwrite(join(output_path, '{}_sudoku_s1_hough.png'.format(filename)), img)
+        
+        # Combine lines with similar rho and theta
+        merged_lines = self.merge_lines(lines)
+        
+        # Filter out lines that don't form a grid pattern (perpendicular on many other lines)
+        filtered_lines, intersection_points = self.filter_lines(merged_lines)
+        
+        # Draw for easier visualization
+        for line in filtered_lines:
+            x1, y1, x2, y2, _, theta_deg, _, axis = line
+            
+            if np.abs(np.abs(theta_deg) % 90 - 45) < 5:
+                cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 0), 3)  # ~45 degrees
+            elif axis == 1:
+                cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 3)  # closer to vertical
+            elif axis == 0:
+                cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)  # closer to horizontal
+
+        # Mark all intersections between two lines
+        for point in intersection_points:
+            cv2.circle(img, (int(point.x), int(point.y)), radius=7, color=(70, 230, 70), thickness=-7)
+
+        cv2.imwrite(join(output_path, '{}_sudoku_s2_filtered_and_dots.png'.format(filename)), img)
+        
+        try:
+            horizontal_rotation = self.determine_grid_rotation(filtered_lines)
+        except Exception:
+            print(filename)
+            return
+        
+        # Rotate image around center to be aligned with Ox and Oy axes
+        img = imutils.rotate(img, angle=-horizontal_rotation)
+        
+        (h, w) = img.shape[:2]
+        (center_x, center_y) = (w / 2, h / 2)
+        
+        # Rotate intersection points around center to be aligned with Ox and Oy axes 
+        intersection_points = list(map(lambda point: affinity.rotate(point, angle=horizontal_rotation, origin=(center_x, center_y)),
+                                    intersection_points))
+        
+        # Draw the new position of the intersection points over the rotated image
+        # If they are aligned with the previous dots drawn, both rotations are done correctly
+        # (or wrong in the same way ^^)
+        for point in intersection_points:
+            cv2.circle(img, (int(point.x), int(point.y)), radius=5, color=(200, 150, 70), thickness=-5)
+        
+        cv2.imwrite(join(output_path, '{}_sudoku_s3_rotated.png'.format(filename)), img)
+
+        # Draw estimated corners
+        x_topleft, y_topleft, x_botright, y_botright = self.determine_corners(intersection_points)
+        cv2.circle(img, (int(x_topleft), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
+        cv2.circle(img, (int(x_topleft), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
+        cv2.circle(img, (int(x_botright), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
+        cv2.circle(img, (int(x_botright), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
+
+        cv2.imwrite(join(output_path, '{}_sudoku_s4_corners.png'.format(filename)), img)
+        
+        grid, identified_cells, black_ink_mask, detected_digits = self.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
+        cv2.imwrite(join(output_path, '{}_sudoku_s5_cells.png'.format(filename)), identified_cells)
+        cv2.imwrite(join(output_path, '{}_sudoku_s6_mask.png'.format(filename)), black_ink_mask)
+        cv2.imwrite(join(output_path, '{}_sudoku_s7_digits.png'.format(filename)), detected_digits)
+        
+        self.write_result(grid, join(output_path, '{}_predicted.txt'.format(filename)))
+
 
 def main():
     sudoku = Sudoku()
-    img = cv2.imread('assets/train/classic/35.jpg')
+    img = cv2.imread('datasets/train/classic/35.jpg')
     # img = cv2.imread('assets/custom/test_lines.jpg')
     
-    scale_percent = 20 # percent of original size
-    width = int(img.shape[1] * scale_percent / 100)
-    height = int(img.shape[0] * scale_percent / 100)
-    dim = (width, height)
-    img = cv2.resize(img, dim, interpolation=cv2.INTER_CUBIC)
-    
-    lines = sudoku.detect_lines(img)
-    
-    for line in lines:
-        x1, y1, x2, y2, _, _, _ = line
-        cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
-        
-    cv2.imwrite('sudoku_hough.png', img)
-    cv2.imshow('sudoku_hough', img)
-    cv2.waitKey(0)
-    
-    merged_lines = sudoku.merge_lines(lines)
-    filtered_lines, intersection_points = sudoku.filter_lines(merged_lines)
-    
-    # print('\n\n\nconverted\n\n')
-    for line in filtered_lines:
-        # print(line)
-        x1, y1, x2, y2, _, theta_deg, _, axis = line
-        
-        if np.abs(np.abs(theta_deg) % 90 - 45) < 5:
-            # print('oblic') 
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 0), 3)
-        elif axis == 1:
-            # print('vertical')
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255), 3)
-        elif axis == 0:
-            # print('orizontal')
-            cv2.line(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
-
-    for point in intersection_points:
-        cv2.circle(img, (int(point.x), int(point.y)), radius=7, color=(70, 230, 70), thickness=-7)
-
-    cv2.imshow('sudoku_filtered_dots', img)
-    cv2.imwrite('sudoku_filtered_dots.png', img)
-    cv2.waitKey(0)
-    
-    horizontal_rotation = sudoku.determine_grid_rotation(filtered_lines)
-    
-    img = imutils.rotate(img, angle=-horizontal_rotation)
-    
-    (h, w) = img.shape[:2]
-    (center_x, center_y) = (w / 2, h / 2)
-    
-    intersection_points = list(map(lambda point: affinity.rotate(point, angle=horizontal_rotation, origin=(center_x, center_y)),
-                                   intersection_points))
-        
-    for point in intersection_points:
-        cv2.circle(img, (int(point.x), int(point.y)), radius=5, color=(200, 150, 70), thickness=-5)
-    
-    cv2.imshow('rotated', img)
-    cv2.imwrite('sudoku_rotated.png', img)
-    cv2.waitKey(0)
-
-    x_topleft, y_topleft, x_botright, y_botright = sudoku.determine_corners(intersection_points)
-    cv2.circle(img, (int(x_topleft), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_topleft), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_botright), int(y_botright)), radius=5, color=(30, 30, 255), thickness=-5)
-    cv2.circle(img, (int(x_botright), int(y_topleft)), radius=5, color=(30, 30, 255), thickness=-5)
-
-    cv2.imshow('corners', img)
-    cv2.imwrite('sudoku_corners.png', img)
-    cv2.waitKey(0)
-    
-    img, black_ink_mask = sudoku.check_cells_content(img, x_topleft, y_topleft, x_botright, y_botright)
-    cv2.imshow('cells', img)
-    cv2.imwrite('sudoku_cells.png', img)
-    cv2.waitKey(0)
-    
-    cv2.imwrite('black_ink_mask.png', black_ink_mask)
-    cv2.imshow('black_ink_mask', black_ink_mask)
-    cv2.waitKey(0)
+    sudoku.solve(img, '35', './')
 
 
 if __name__ == '__main__':
