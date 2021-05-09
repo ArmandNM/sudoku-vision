@@ -199,17 +199,15 @@ class Sudoku:
             else:
                 grouped_lines.append(np.array([line]))
         
-        assert len(grouped_lines) == 2
-        # if len(grouped_lines) != 2:
-        #     print('Something is not right!')
-
-        # Take the rotation on the horizontal axis
-        if grouped_lines[0][0, -1] == 0:
-            grid_rotation = grouped_lines[0][:, 5].mean()
-        elif grouped_lines[1][0, -1] == 0:
-            grid_rotation = grouped_lines[1][:, 5].mean()
+        # assert len(grouped_lines) == 2  # convert Q4 to Q2 to fix this!
         
-        return grid_rotation
+        # Take the rotation on the horizontal axis
+        for i in range(len(grouped_lines)):
+            if grouped_lines[i][0, -1] == 0:
+                grid_rotation = grouped_lines[i][:, 5].mean()
+                return grid_rotation
+        
+        return 0
     
     def determine_corners(self, intersection_points):
         points_matrix = np.array(list(map(lambda point: [point.x, point.y], intersection_points)))
