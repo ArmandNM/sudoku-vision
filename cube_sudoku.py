@@ -10,7 +10,7 @@ from itertools import permutations
 from sudoku import Sudoku
 from digit_classifier import get_classifier, fix_prediction
 
-DEBUG_IMAGES = True
+DEBUG_IMAGES = False
 
 
 class CubeSudoku(Sudoku):
@@ -135,14 +135,6 @@ class CubeSudoku(Sudoku):
                 digit = preds.argmax().item()
                 digit = fix_prediction(digit, preds[0].detach().numpy())
                 digits[i, j] = digit
-                
-                # # some debugging
-                # if digit == 1:
-                #     print(preds)
-                #     print(np.abs(preds[0].detach().numpy()[4] - preds[0].detach().numpy()[1]))
-                #     if DEBUG_IMAGES:
-                #         cv2.imshow('patch', pc)
-                #         cv2.waitKey(0)
         
         return digits
 
@@ -165,11 +157,47 @@ class CubeSudoku(Sudoku):
 
         return correct
 
-    def write(self):
-        pass
-    
-    def project(self):
-        pass
+    def project_on_cube(self, face1, face2, face3):
+        def project(face, region, template):
+            white = 255 * np.ones((face.shape[0], face.shape[1], 3), np.uint8)
+            face_points = np.float32([[0, 0], [face.shape[1], 0],
+                                     [face.shape[1], face.shape[0]], [0, face.shape[0]]])
+            h, _ = cv2.findHomography(face_points, region)
+            
+            white_warped = cv2.warpPerspective(white, h, (template.shape[1], template.shape[0]))
+            face_warped = cv2.warpPerspective(face, h, (template.shape[1], template.shape[0]))
+            
+            template = template.astype(float) - white_warped.astype(float) + face_warped.astype(float)
+            template = template.astype(np.uint8)
+            
+            if DEBUG_IMAGES:
+                cv2.imshow('face warped', template)
+                cv2.waitKey(0)
+            
+            return template
+
+        template_W = 588
+        template_H = 544
+        template = 255 * np.ones((template_H, template_W, 3), dtype=np.uint8)
+        
+        A = [5, 158]
+        B = [5, 463]
+        C = [296, 539]
+        D = [296, 234]
+        E = [564, 386]
+        F = [564, 83]
+        G = [272, 2]
+        
+        region2 = np.float32([A, D, C, B])
+        template = project(face2, region2, template)
+        
+        region3 = np.float32([D, F, E, C])
+        template = project(face3, region3, template)
+        
+        region1 = np.float32([G, F, D, A])
+        template = project(face1, region1, template)
+        
+        return template
 
     def solve(self, img, filename, output_path):
         img = self.resize_image(img, scale_percent=200)
@@ -199,40 +227,22 @@ class CubeSudoku(Sudoku):
         cv2.imwrite(join(output_path, '{}_cube_grid3.png'.format(filename)), aligned_grid_black3)
         
         digits_grid1 = self.identify_digits(aligned_grid_blue1)
-        print(digits_grid1)
-        print(digits_grid1.sum())
-        if self.is_grid_correct(digits_grid1):
-            print('Seems correct!')
-        else:
-            print('Oopsie')
-        
         digits_grid2 = self.identify_digits(aligned_grid_blue2)
-        print(digits_grid2)
-        print(digits_grid2.sum())
-        if self.is_grid_correct(digits_grid1):
-            print('Seems correct!')
-        else:
-            print('Oopsie')
-        
-        # print((digits_grid2 == 9).sum())
-        
         digits_grid3 = self.identify_digits(aligned_grid_blue3)
-        print(digits_grid3)
-        print(digits_grid3.sum())
-        # print((digits_grid3 == 9).sum())
-        if self.is_grid_correct(digits_grid1):
-            print('Seems correct!')
-        else:
-            print('Oopsie')
+        if self.is_grid_correct(digits_grid1) and \
+           self.is_grid_correct(digits_grid2) and \
+           self.is_grid_correct(digits_grid3):
+               print('Grid digits seem correct!')
         
         # Backtracking to find the right face order
         digit_grids = [digits_grid1, digits_grid2, digits_grid3]
+        faces = [aligned_grid_black1, aligned_grid_black2, aligned_grid_black3]
         perm = list(permutations([0, 1, 2]))
         for (idx1, idx2, idx3) in perm:
-            if idx1 == 0 and idx2 == 2 and idx3 == 1:
-                    print('mai')
             if self.is_order_correct(digit_grids[idx1], digit_grids[idx2], digit_grids[idx3]):
-                print(idx1, idx2, idx3)
+                result = self.project_on_cube(faces[idx1], faces[idx2], faces[idx3])
+                cv2.imwrite(join(output_path, '{}_result.png'.format(filename)), result)
+                return digit_grids[idx1], digit_grids[idx2], digit_grids[idx3]
 
 def main():
     sudoku = CubeSudoku()

@@ -16,7 +16,6 @@ from cube_sudoku import CubeSudoku
 
 RUN_CHECKER = False
 
-
 def check(gt_path, prediction_path):
     with open(prediction_path, 'r') as f:
         pred = f.readlines()
@@ -80,15 +79,40 @@ def solve_task2(img, filename, output_path):
 
 
 def solve_task3(img, filename, output_path):
+    def _write_result(digits_grid1, digits_grid2, digits_grid3, filepath):
+        with open(filepath, 'w') as f:
+            # Write 1st grid
+            for i in range(9):
+                crt_line = ''
+                for j in range(9):
+                    crt_line += str(int(digits_grid1[i, j]))
+                f.write(crt_line + '\n')
+            
+            f.write('\n')
+            
+            # Write 2nd and 3rd grids
+            for i in range(9):
+                crt_line = ''
+                # 2nd grid
+                for j in range(9):
+                    crt_line += str(int(digits_grid2[i, j]))
+                crt_line += ' '
+                # 3nd grid
+                for j in range(9):
+                    crt_line += str(int(digits_grid3[i, j]))
+            
+                f.write(crt_line + '\n')
+    
     sudoku = CubeSudoku()
-    sudoku.solve(img, filename, output_path)
+    digits_grid1, digits_grid2, digits_grid3 = sudoku.solve(img, filename, output_path)
+    _write_result(digits_grid1, digits_grid2, digits_grid3, join(output_path, '{}_predicted.txt'.format(filename)))
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', default='datasets/train/cube')
-    parser.add_argument('--output_path', default='results/train/cube')
-    parser.add_argument('--task', default=3)
+    parser.add_argument('--input_path', default='datasets/test/classic')
+    parser.add_argument('--output_path', default='results/test/classic')
+    parser.add_argument('--task', default=1)
     args = parser.parse_args()
     
     print(args)
@@ -107,6 +131,10 @@ def main():
     for file in listdir(args.input_path):
         img_path = join(args.input_path, file)
         if not isfile(img_path):
+            continue
+        if 'result' in file:  # Skip task 3 results
+            continue
+        if 'template' in file:  # Skip task 3 template
             continue
         
         # Skip non-image files
