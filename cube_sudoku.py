@@ -5,8 +5,7 @@ import torch
 
 from os.path import join
 
-from pytesseract import Output
-from PIL import Image
+from itertools import permutations 
 
 from sudoku import Sudoku
 from digit_classifier import get_classifier, fix_prediction
@@ -147,6 +146,31 @@ class CubeSudoku(Sudoku):
         
         return digits
 
+    def is_grid_correct(self, digits):
+        correct = True
+        for i in range(1, 10):
+            if (digits == i).sum() != 9:
+                correct = False
+        return correct
+
+    def is_order_correct(self, digits_grid1, digits_grid2, digits_grid3):
+        correct =  True
+        
+        if not np.all(digits_grid1[-1, :] == digits_grid2[0, :]):
+            correct = False
+        if not np.all(digits_grid2[:, -1] == digits_grid3[:, 0]):
+            correct = False
+        if not np.all(digits_grid1[:, -1] == np.flip(digits_grid3[0, :])):
+            correct = False
+
+        return correct
+
+    def write(self):
+        pass
+    
+    def project(self):
+        pass
+
     def solve(self, img, filename, output_path):
         img = self.resize_image(img, scale_percent=200)
         img_clean = img.copy()
@@ -176,12 +200,19 @@ class CubeSudoku(Sudoku):
         
         digits_grid1 = self.identify_digits(aligned_grid_blue1)
         print(digits_grid1)
-        # print((digits_grid1 != 9).sum())
         print(digits_grid1.sum())
+        if self.is_grid_correct(digits_grid1):
+            print('Seems correct!')
+        else:
+            print('Oopsie')
         
         digits_grid2 = self.identify_digits(aligned_grid_blue2)
         print(digits_grid2)
         print(digits_grid2.sum())
+        if self.is_grid_correct(digits_grid1):
+            print('Seems correct!')
+        else:
+            print('Oopsie')
         
         # print((digits_grid2 == 9).sum())
         
@@ -189,7 +220,19 @@ class CubeSudoku(Sudoku):
         print(digits_grid3)
         print(digits_grid3.sum())
         # print((digits_grid3 == 9).sum())
-
+        if self.is_grid_correct(digits_grid1):
+            print('Seems correct!')
+        else:
+            print('Oopsie')
+        
+        # Backtracking to find the right face order
+        digit_grids = [digits_grid1, digits_grid2, digits_grid3]
+        perm = list(permutations([0, 1, 2]))
+        for (idx1, idx2, idx3) in perm:
+            if idx1 == 0 and idx2 == 2 and idx3 == 1:
+                    print('mai')
+            if self.is_order_correct(digit_grids[idx1], digit_grids[idx2], digit_grids[idx3]):
+                print(idx1, idx2, idx3)
 
 def main():
     sudoku = CubeSudoku()
