@@ -1,11 +1,15 @@
 import cv2
 import numpy as np
 import imutils
+import torch
+
+from os.path import join
 
 from pytesseract import Output
 from PIL import Image
 
 from sudoku import Sudoku
+from digit_classifier import get_classifier, fix_prediction
 
 DEBUG_IMAGES = True
 
@@ -72,12 +76,76 @@ class CubeSudoku(Sudoku):
         
         # Select only the grid region and remove empty space caused by rotation
         bbox = self.get_bounding_box(np.all(grid_img_blue == [255, 0, 0], axis=2))
-        aligned_grid_img = grid_img_black[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+        padding = 5
+        aligned_grid_blue = grid_img_blue[bbox[1]+padding:bbox[3]-padding, bbox[0]+padding:bbox[2]-padding]
+        aligned_grid_black = grid_img_black[bbox[1]+padding:bbox[3]-padding, bbox[0]+padding:bbox[2]-padding]
         
         # cv2.imshow('aligned', aligned_grid_img)
         # cv2.waitKey(0)
         
-        return aligned_grid_img
+        return aligned_grid_blue, aligned_grid_black
+
+    def identify_digits(self, aligned_grid_img):
+        digits = np.zeros((9, 9))
+        model = get_classifier()
+        
+        grid_H, grid_W = aligned_grid_img.shape[:2]
+        cell_h = grid_H / 9
+        cell_w = grid_W / 9
+        
+        # Make digits white over black background as in MNIST
+        lower_black = np.array([0, 0, 0])
+        upper_black = np.array([100, 100, 100])
+        binary_grid = cv2.inRange(aligned_grid_img, lower_black, upper_black)
+        kernel = np.ones((3, 3), np.uint8)
+        binary_grid = cv2.dilate(binary_grid, kernel, iterations=1)
+        
+        # cv2.imshow('binary_grid', binary_grid)
+        # cv2.waitKey(0)
+        
+        for i in range(9):
+            for j in range(9):
+                # Top left coordinates of the cell
+                cell_x1 = j * cell_w
+                cell_y1 = i * cell_h
+                
+                # Bottom right coordinates of the cell
+                cell_x2 = cell_x1 + cell_w
+                cell_y2 = cell_y1 + cell_h
+                
+                # Take cell center coordinates
+                alpha = 0.01
+                cell_x1 += alpha * cell_w 
+                cell_y1 += alpha* cell_h
+                cell_x2 -= alpha * cell_w
+                cell_y2 -= alpha * cell_h
+                
+                # Extract patch
+                patch = binary_grid[int(cell_y1):int(cell_y2), int(cell_x1):int(cell_x2)]
+                patch = cv2.resize(patch, (28, 28), interpolation=cv2.INTER_CUBIC)
+                pc = patch.copy()
+                # if DEBUG_IMAGES:
+                #     cv2.imshow('patch', patch)
+                #     cv2.waitKey(0)
+                # Convert to torch tensor
+                patch = np.expand_dims(patch, axis=0)
+                patch = np.expand_dims(patch, axis=0)
+                patch = torch.Tensor(patch / 255)
+                # Make prediction
+                preds = torch.softmax(model(patch), dim=-1)
+                digit = preds.argmax().item()
+                digit = fix_prediction(digit, preds[0].detach().numpy())
+                digits[i, j] = digit
+                
+                # # some debugging
+                # if digit == 1:
+                #     print(preds)
+                #     print(np.abs(preds[0].detach().numpy()[4] - preds[0].detach().numpy()[1]))
+                #     if DEBUG_IMAGES:
+                #         cv2.imshow('patch', pc)
+                #         cv2.waitKey(0)
+        
+        return digits
 
     def solve(self, img, filename, output_path):
         img = self.resize_image(img, scale_percent=200)
@@ -98,24 +166,36 @@ class CubeSudoku(Sudoku):
         grid_lines = 255 * np.all(img == [255, 0, 0], axis=2).astype(np.uint8)
         nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(grid_lines, connectivity=4)
         
-        aligned_grid_img1 = self.extract_aligned_grid(img_clean, img, output == 1)
-        aligned_grid_img2 = self.extract_aligned_grid(img_clean, img, output == 2)
-        aligned_grid_img3 = self.extract_aligned_grid(img_clean, img, output == 3)
+        aligned_grid_blue1, aligned_grid_black1 = self.extract_aligned_grid(img_clean, img, output == 1)
+        aligned_grid_blue2, aligned_grid_black2 = self.extract_aligned_grid(img_clean, img, output == 2)
+        aligned_grid_blue3, aligned_grid_black3 = self.extract_aligned_grid(img_clean, img, output == 3)
         
-        if DEBUG_IMAGES:
-            cv2.imshow('grid1', aligned_grid_img1)
-            cv2.waitKey(0)
-            cv2.imshow('grid2', aligned_grid_img2)
-            cv2.waitKey(0)
-            cv2.imshow('grid3', aligned_grid_img3)
-            cv2.waitKey(0)
+        cv2.imwrite(join(output_path, '{}_cube_grid1.png'.format(filename)), aligned_grid_black1)
+        cv2.imwrite(join(output_path, '{}_cube_grid2.png'.format(filename)), aligned_grid_black2)
+        cv2.imwrite(join(output_path, '{}_cube_grid3.png'.format(filename)), aligned_grid_black3)
+        
+        digits_grid1 = self.identify_digits(aligned_grid_blue1)
+        print(digits_grid1)
+        # print((digits_grid1 != 9).sum())
+        print(digits_grid1.sum())
+        
+        digits_grid2 = self.identify_digits(aligned_grid_blue2)
+        print(digits_grid2)
+        print(digits_grid2.sum())
+        
+        # print((digits_grid2 == 9).sum())
+        
+        digits_grid3 = self.identify_digits(aligned_grid_blue3)
+        print(digits_grid3)
+        print(digits_grid3.sum())
+        # print((digits_grid3 == 9).sum())
 
 
 def main():
     sudoku = CubeSudoku()
     img = cv2.imread('datasets/train/cube/1.jpg')
     
-    sudoku.solve(img, '2', './')
+    sudoku.solve(img, '1', './')
 
 
 if __name__ == '__main__':

@@ -12,9 +12,9 @@ from shapely import affinity
 
 from sudoku import Sudoku
 from jigsaw_sudoku import JigsawSudoku
+from cube_sudoku import CubeSudoku
 
-
-RUN_CHECKER = True
+RUN_CHECKER = False
 
 
 def check(gt_path, prediction_path):
@@ -79,18 +79,23 @@ def solve_task2(img, filename, output_path):
         _write_result(grid, regions, join(output_path, '{}_predicted.txt'.format(filename)))
 
 
+def solve_task3(img, filename, output_path):
+    sudoku = CubeSudoku()
+    sudoku.solve(img, filename, output_path)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', default='datasets/train/jigsaw')
-    parser.add_argument('--output_path', default='results/train/jigsaw')
-    parser.add_argument('--task', default=2)
+    parser.add_argument('--input_path', default='datasets/train/cube')
+    parser.add_argument('--output_path', default='results/train/cube')
+    parser.add_argument('--task', default=3)
     args = parser.parse_args()
     
     print(args)
     
     assert args.task in [1, 2, 3]
     
-    tasks = [solve_task1, solve_task2]
+    tasks = [solve_task1, solve_task2, solve_task3]
     
     if not exists(args.output_path):
         makedirs(args.output_path)
