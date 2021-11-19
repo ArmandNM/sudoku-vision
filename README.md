@@ -70,3 +70,29 @@ To label the regions we apply the same logic as finding the connected components
 |   |   |   |   |   |   |   |   |   |
 
 </p>
+
+### Task 3. Cube Sudoku
+Having three faces of a sudoku cube, we want to detect all the digits they contain and then reconstruct the 3D sudoku cube. Two adjacent faces have matching valuess on the margin.
+
+<p align="center"><img src="assets/cube_1.png"/width = 80%></p>
+
+#### Step 3.1. Extract faces
+Using similar color filtering as for the first tasks, we create a mask containing positive values where we have pixels part of a sudoku grid. We compute the connected components so we will have 3 separated regions (the biggest components). For each region we take the min-max points on all coordinates and find the bounding box for each face. Similarly to Task 1, we estimate the horizontal rotation for each face, align with the axes and then crop exactly on the corners of the aligned face. We obtain 3 clean and aligned images representing the faces of the cube.
+
+<p align="center"><img src="assets/cube_1_faces.png"/width = 77%></p>
+
+#### Step 3.2. Digit detection
+For this step, we use a convolutional architecture trained on MNIST that can classify digits centered in a 28x28 image. We apply a threshold again to get positive values where digits are present and negative values on the background and apply erosion. Now the digits look similar to the MNIST dataset. To get the centered digit regions to feed to the classification model, we iterate as in step 1.5  on the estimated cell positions, as we are now working in the isolated and centered grid face.
+
+<p align="center"><img src="assets/cube_1_mnist_like.png"/width = 27%></p>
+
+#### Step 3.3. Matching faces
+Adjacent faces should have the same values on their intersection. At this point, we know the digits on each face, so we can try all permutations and find the configuration that satisfies this condition.
+
+#### Step 3.3. Projections on the cube
+
+Now, we know which one is the top face, which one is the left one and which one fits on the right. Because our cube template is an idealized geometrical representation, we don’t need perspective projections; a simple affine transformation to wrap the faces on their corresponding positions on the template is enough. We manually pick the coordinates of the vertices of the template cube, but it can be done programmatically if they are marked with specific colors and then we get the index of that color in the image matrix.
+
+These are the final results:
+
+<p align="center"><img src="assets/cube_1_result.png"/width = 45%></p>
