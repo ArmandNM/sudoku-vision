@@ -1,6 +1,15 @@
 # sudoku-vision
 The goal of this project is to develop an *automatic system for extracting visual information from images containing different variations of Sudoku puzzles*. This is the 1st Assignment of the Computer Vision course taught at the *Artificial Intelligence* master program at University of Bucharest.
 
+## Installation
+```shell
+conda create -n sudoku python=3.9
+conda activate sudoku
+pip install -r requirements.txt
+```
+
+You can find [running instructions](#running-instructions) after tasks description.
+
 ### Task 1. Classic Sudoku
 Having a picture of a sudoku grid taken with a mobile phone camera (prone to artifacts and can be rotated), determine the structure of the grid and the cells that contain digits.
 
@@ -96,3 +105,22 @@ Now, we know which one is the top face, which one is the left one and which one 
 These are the final results:
 
 <p align="center"><img src="assets/cube_1_result.png"/width = 45%></p>
+
+## Running instructions
+Use command line arguments to specify image paths and the task you want to run.
+
+```shell
+# Task 1
+python runner.py --input_path=datasets/train/classic/ --output_path=results/train/classic --task=1 --checker
+python runner.py --input_path=datasets/test/classic/ --output_path=results/test/classic --task=1
+
+# Task 2
+python runner.py --input_path=datasets/train/jigsaw/ --output_path=results/train/jigsaw --task=2 --checker
+python runner.py --input_path=datasets/test/jigsaw/ --output_path=results/test/jigsaw --task=2
+
+# Task 3
+python runner.py --input_path=datasets/train/cube/ --output_path=results/train/cube --task=3 --checker
+python runner.py --input_path=datasets/test/cube/ --output_path=results/test/cube --task=3
+```
+
+You can set the path to your own sudoku images. If you want to use the automated checker, create prediction groundtruth files similar to the ones from the training directory.
